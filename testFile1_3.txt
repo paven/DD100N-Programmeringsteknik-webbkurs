@@ -1,0 +1,17 @@
+This is an example $Text1 for my testing
+$Text1 replaces the word anyware
+testing is absolete $Text1 and any how
+$Text1 and now and then
+te $Text1 
+
+$Text2 abcde
+abcd $Text2 efghijk
+$Text2 abcdfghi
+$Text2 dfda
+$Text2 dsafas
+
+$Text3 abcd
+avcd $Text3 abcd
+dafdas $Text3
+$Text3 dffads
+$Text3 hgfha

@@ -1,0 +1,424 @@
+# -*- coding: utf-8 -*-
+
+# Programmeringsteknik webbkurs KTH Projekt prototyp
+# Titel: Horoskop (Prototyp)
+# Patrik Gustafsson
+# 2011-10-24
+#
+# Detta är ett program som ger dig ett horoskop medelande baserat på din födelsedag
+# programmet användet två käll filer
+# File.txt innehåller text strängar och nycklar för egenskaper och effekter
+# File2.txt innehåller ord med nycklar och dess ersättningsord
+#
+# Användaren får matta in sin födelsdata, programmet validerar det som ett datum.
+# och användare kan då be om ett horoskop, horsokopet baseraras först och främst på måndad och dag.
+# Två personer på efterföljande dagar få olika horoskop.
+# Ålder spelar in för vilka egenskaper som väljs istället för nyckel orden.
+
+from tkinter import *
+from copy import deepcopy
+from string import Template
+from datetime import *
+import unittest #Unittest finns för delar av koden, men är i inlämningen avkomenterad. (se slutet)
+
+
+
+""" Horoskop den klass som gör själva beräkningen av horoskopet. 
+
+    ej publika attribut
+    matrix - ett objekt av typen Matrix av en fil med grundtexten
+    textEdit - ett objekt av typen TextEdit som innehåller ersättnings ord och dess nycklar.
+    
+
+    see http://www.cs.tufts.edu/comp/190/TeamWorkAreas/t2/ModellingFaces/FaceGen/src/GUI.py
+"""
+class Horoscope:
+    
+    """ matrixfile innehåller det general horoskopet i meningar
+        textFile innehåller enstaka ord för olika åldersgrupper.
+    """
+    def __init__(self, matrixFile, textFile):
+        self.matrix = Matrix(matrixFile)
+        self.textEdit = TextEdit(textFile)
+
+    """ birthDate är datumet då användaren föddes in formatat datetime.Date
+        returns en text som är hosokopet för den personen.
+    """
+    def getHoroscope(self, birthDate):
+        
+        horoscope = ""
+        for i in range(3):
+            horoscope += self.matrix.getCell(i, birthDate.replace(year=1).toordinal()-1) ##enbart år spelar roll.
+            horoscope += '\n'
+        horoscope = self.textEdit.edit(horoscope,  DateManager.ageGroup(birthDate))   
+        return horoscope
+
+""" --------  En klass som samlar beräknings funktioner för datum  --------"""
+class DateManager:
+
+    
+    def checkOneAge(ageYear, ageMonth, targetYear):
+        if ageYear == targetYear:
+            if (ageMonth >= 0): ##har redan fyllt år? Eller fyller denna månad?
+                return 1
+        return 0
+        
+
+    """
+        returnerar 0 - Barn 0-17
+                   1 - Vuxen 18-64 
+                   2 - Pensionär 65+
+    """
+    def ageGroup(birthDate):
+        ageYear = date.today().year - birthDate.year
+        ageMonth = date.today().month - birthDate.month
+        if (ageYear <= 18):
+            return DateManager.checkOneAge(ageYear, ageMonth, 18)
+        elif (ageYear <= 65):
+            return DateManager.checkOneAge(ageYear, ageMonth, 65) + 1
+        else:
+            return 2
+                    
+    
+   
+        
+
+    
+        
+    
+""" --------  En klass som läser en fil och representerar den som en matris  --------
+    Läser och skriver en fil som sparar en matris
+    generelt skriven så den ska kunna återanvändas.
+
+    ej publika attribut
+    matrix - sparar matrisen.
+    file - filens namn
+    
+"""
+class Matrix:
+    def __init__(self, file):
+            self.file = file
+            self.load()
+
+ 
+    """läser filen till matrisen"""
+    def load(self):
+            self.matrix = [[],[],[]]
+            i = 0
+            file = open(self.file, 'rU')
+            for line in file:
+                if (line == "\n"): ##om raden är tom har nästa rad ett nytt keyword
+                    i += 1
+                else:
+                    line =line.rstrip('\n') ##tarbort radbrytningar
+                    self.matrix[i].append(line)
+            
+            file.close()
+
+
+    """tillgång till innehållet i matrisen"""
+    def getMatrixClone(self):
+            return deepcopy(self.matrix) ## skyddad matrix, TODO onödig?
+            
+    """tillgång till en cell"""
+    def getCell(self, i, j):
+            return self.matrix[i%len(self.matrix)][j%len(self.matrix[i%len(self.matrix)])]
+
+
+
+"""--------  En klass som läser en fil och representerar den som en matris  --------
+    ersätter $keyword med text
+
+    ej publika attribut
+    matrix text fil som innehåller nychelord och dess ersättnings texter
+"""
+class TextEdit:
+    def __init__(self, file):
+            self.matrix = Matrix(file)
+            
+
+    """retunerar en ext där "$keyword" i textOrginal ersätts med en text beroende av åldersgrupp"""
+    def edit(self, textOrignal, ageGroup):
+            template = Template(textOrignal)
+            keys = dict()
+            for arr in self.matrix.getMatrixClone():
+                keys[arr[0]] = arr[ageGroup]
+            template =  template.substitute(keys)
+            
+            return template
+
+
+
+            
+
+
+"""--------  Grafisk abstraktion av programmet som hanterar användaren  --------
+    ej publika attribut
+    horoscope - beräkningsobjekt som gör själva beräkningarna.
+    birth - validerat födelsedatum
+    -Widgets:
+    ok - aktiverar validering, och visar resultat från datum validering, om valider ok, aktiverar horoscope beräkning.
+    quit - stänger programmet(inkl IDLE)
+    inDate - inmattnings fält för datum
+    result - redovisning av resultat.
+    
+
+
+"""
+class HoroscopeGUI(Frame):
+    def __init__(self, master=None):
+        Frame.__init__(self, master)
+
+        
+        self.horoscope = Horoscope("File.txt", "File2.txt")
+        self.grid()
+        self.createWidgets()
+
+    def okAction(self):
+        self.result.config(text=self.horoscope.getHoroscope(self.birth))
+
+
+    """ Validerar indatan
+
+        @see http://stackoverflow.com/questions/4140437/python-tkinter-interactively-validating-entry-widget-content
+        # valid percent substitutions (from the Tk entry man page)
+        # %d = Type of action (1=insert, 0=delete, -1 for others)
+        # %i = index of char string to be inserted/deleted, or -1
+        # %P = value of the entry if the edit is allowed
+        # %s = value of entry prior to editing
+        # %S = the text string being inserted or deleted, if any
+        # %v = the type of validation that is currently set
+        # %V = the type of validation that triggered the callback
+        #      (key, focusin, focusout, forced)
+        # %W = the tk name of the widget
+    """
+
+    def finalValidate(self, textToValidate):
+        try:
+            self.birth = datetime.strptime( textToValidate, "%Y-%m-%d" )
+            return True #Är ett datum
+        except ValueError:
+            return False #Är ett datum
+        
+    def validate(self, d=None, i=None, P=None, s=None, S=None, v=None, V="MethodCall", W=None):
+        
+        textToValidate = P  ##att använda self.inDate.get() fungerar inte, bug i tkinter?
+        print (textToValidate)
+        
+        if(self.finalValidate(textToValidate)):
+            self.ok.config(text="OK", command=self.okAction)
+            return True #is a date
+        else: ##Validation of partial date structure
+            textToValidateNoLine = textToValidate.replace("-", "")
+            print("fail")
+            self.ok.config(text="invalid date", command=self.validate)
+            if(textToValidateNoLine.isdigit()):
+                return True ##string is not complete date but valid so far.
+            if (len(textToValidateNoLine) <= 0):
+                return True ##String has no text and are considerd valid so far
+            
+            return False ##is not a date or on the way to become one contains erodius Characters
+        
+
+    def createWidgets(self):
+        self.ok = Button(self, text="invalid date",  command=self.validate)
+        self.ok.grid(row=0, column=0)
+        
+            
+        self.quit = Button(self, text="Quit", command=self.quit)
+        self.quit.grid(row=0, column=1)
+
+
+        self.label1 = Label(self, text="Birth(yyyy-mm-dd)")
+        self.label1.grid(row=1, columnspan=2)
+ 
+        self.inDate = Entry(self, width=10, validate=ALL, text="1978-07-20", validatecommand=(self.master.register(self.validate), '%d', '%i', '%P', '%s', '%S', '%v', '%V', '%W'))
+        self.inDate.grid(row=2, column=0, columnspan=2)
+        self.inDate.focus()
+
+        self.result = Label(self, text="")
+        self.result.grid(row=3, columnspan=2)
+        
+ 
+
+            
+        
+        
+        
+            
+          
+
+
+
+
+
+###Tester
+
+class Test_DateManager(unittest.TestCase):
+    ###def setUp(self):
+
+    ###Hjälp metoder
+    def monthSwapp(currentMonth, change):
+        month=currentMonth+change
+        while month>12:
+            month -= 12
+        while month<1:
+            month +=12
+        return month
+    
+    def dateModifier(date, monthChange):
+        month = Test_DateManager.monthSwapp(date.month, monthChange)
+        returnDate = date.replace(month = month)
+
+        if monthChange > 0:
+            if returnDate < date:             
+                returnDate = returnDate.replace(year = returnDate.year +1)
+        if monthChange < 0:
+            if returnDate > date:
+                returnDate = returnDate.replace(year = returnDate.year -1)
+        
+        return returnDate
+            
+
+    
+    def test_ageGroup_age0returnsGroup0(self):
+        print("0 0 test_ageGroup_age0returnsGroup0")
+        birthDate = date.today()
+        actual = DateManager.ageGroup(birthDate)
+        expected = 0
+        self.assertEqual(actual, expected)
+
+    def test_ageGroup_age1returnsGroup0(self):
+        print("1 0 test_ageGroup_age1returnsGroup0")
+        birthDate = date.today().replace(year = (date.today().year -1))
+        actual = DateManager.ageGroup(birthDate)
+        expected = 0
+        self.assertEqual(actual, expected)
+
+    def test_ageGroup_age18returnsGroup1(self):
+        print("18 1 test_ageGroup")
+        birthDate = date.today().replace(year = (date.today().year -18))
+        actual = DateManager.ageGroup(birthDate)
+        expected = 1
+        self.assertEqual(actual, expected)
+         
+    def test_ageGroup_age17returnsGroup0(self):
+        print("17 0 test_ageGroup")
+        birthDate = date.today().replace(
+            year = (date.today().year -17 ))
+        actual = DateManager.ageGroup(birthDate)
+        expected = 0
+        self.assertEqual(actual, expected)
+        
+    def test_ageGroup_age17Near18returnsGroup0(self):
+        print("17 0 test_ageGroup Near 18")
+        birthDate = date.today().replace(
+            year = (date.today().year -17 )) ##setsYear
+        birthDate = Test_DateManager.dateModifier(birthDate, 11) ##changes month
+        ##print("Debug: BirthDate: ", birthDate)
+        
+        
+        actual = DateManager.ageGroup(birthDate)
+        expected = 0
+        self.assertEqual(actual, expected)
+
+    def test_ageGroup_age0TO17Near18ReturnGroup0(self):
+        print("x 0 test_ageGroup 0 to Near 18")
+        for yearChange in range(18):
+            for monthChange in range(12):
+                birthDate = date.today().replace(
+                    year = (date.today().year -yearChange )) ##setsYear
+                birthDate = Test_DateManager.dateModifier(birthDate, monthChange) ##changes month
+                
+                actual = DateManager.ageGroup(birthDate)
+                expected = 0
+
+                self.assertEqual(actual, expected)
+
+    def test_ageGroup_age18TO64Near65ReturnGroup1(self):
+        print("x 1 test_ageGroup 18 to Near 65")
+        for yearChange in range(20, 65):
+            ##print("Debug: YearChange", yearChange)
+            for monthChange in range(12):
+                ##print("--Debug: monthChange", monthChange, "Debug: YearChange", yearChange)
+                birthDate = date.today().replace(
+                    year = (date.today().year -yearChange )) ##setsYear
+                birthDate = Test_DateManager.dateModifier(birthDate, -monthChange) ##changes month
+                ##print("---Debug: birthDate", birthDate)
+                actual = DateManager.ageGroup(birthDate)
+                expected = 1
+
+                self.assertEqual(actual, expected )
+
+    def test_dateModifier(self):
+        print("Test dateModifiere, add oneMonth is one month later")
+        testDate = date(year=2000, month=1, day=1)
+        
+        actual = Test_DateManager.dateModifier(testDate, 1)
+        expected = date(year=2000, month=2, day=1)
+
+        self.assertEqual(actual, expected)
+
+
+class Test_Horoscope1WithoutTextedit(unittest.TestCase):
+    def setUp(self):
+        self.horoscope = Horoscope("testFile1_1.txt", "testFile2_1.txt")
+        
+
+        
+    def test_toOrdinal(self):
+        print ("test_toOrdinal")
+        birthDate=date(year=1, month=1, day=1)
+        actual = birthDate.replace(year=1).toordinal()
+        expected = 1
+        self.assertEqual(actual, expected)
+
+
+class Test_TextEdit(unittest.TestCase):
+    def setUp(self):
+        self.textEdit = TextEdit("testFile2_2.txt")
+
+    def test_keywordText1GivesText1_1(self):
+        actual = self.textEdit.edit("$Text1", 1)
+        expected = "Text1.1"
+        self.assertEqual(actual, expected)
+        
+    def test_keywordText2GivesText2_1(self):
+        actual = self.textEdit.edit("$Text2", 1)
+        expected = "Text2.1"
+        self.assertEqual(actual, expected)
+    
+        
+
+class TestHoroscope2(unittest.TestCase):
+    def setUp(self):
+        self.horoscope = Horoscope("testFile1_2.txt", "testFile2_2.txt")
+
+    def test_getHoroscope1Jan(self):
+        print("test_getHoroscope1Jan 2")
+        birthDate=date(year=1990, month=1, day=1)
+        
+        actual = self.horoscope.getHoroscope(birthDate)
+        expected = "Text1.1\nText2.1\nText3.1\n"
+        self.assertEqual(actual, expected)
+        
+class TestHoroscope3(unittest.TestCase):
+    def setUp(self):
+        self.horoscope = Horoscope("testFile1_3.txt", "testFile2_3.txt")
+
+    def test_getHoroscope1Jan(self):
+        print("test_getHoroscope1Jan 2")
+        birthDate=date(year=1990, month=1, day=1)
+        
+        actual = self.horoscope.getHoroscope(birthDate)
+        expected = "This is an example Word for my testing\nFish abcde\nLaser abcd\n"
+        self.assertEqual(actual, expected)
+        
+"""Deaktivera programet genom att komentera bort följande kod"""        
+horoscope = HoroscopeGUI()
+horoscope.master.title("Horoscope")         
+
+"""Aktivera tester genom att avkommentera följande kod"""
+#unittest.main()    
+
+    
